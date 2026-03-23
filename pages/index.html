@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlueFlix Player</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Syne+Mono&display=swap');
+
+* { box-sizing:border-box; margin:0; padding:0; }
+
+:root {
+  --bg:#05060a; --surface:#0c0e16; --border:#181c2c;
+  --accent:#e8ff47; --dim:#2a2f45; --text:#eceef8;
+  --muted:#454a62; --error:#ff4f6a;
+}
+
+html,body {
+  height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Syne',sans-serif;
+  overflow:hidden;
+}
+
+.bg-grid {
+  position:fixed; inset:0;
+  background-image:linear-gradient(rgba(232,255,71,0.03) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(232,255,71,0.03) 1px,transparent 1px);
+  background-size:48px 48px;
+}
+
+.screen {
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+}
+
+.card {
+  width:400px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:4px;
+  overflow:hidden;
+  box-shadow:0 40px 100px rgba(0,0,0,0.7);
+}
+
+.card-header {
+  background:var(--accent);
+  padding:20px 28px;
+  display:flex;
+  gap:10px;
+}
+
+.logo {
+  font-size:22px;
+  font-weight:800;
+  color:#05060a;
+}
+
+.logo-tag {
+  font-family:'Syne Mono';
+  font-size:10px;
+  color:rgba(0,0,0,0.6);
+}
+
+.card-body { padding:28px; }
+
+.field-label {
+  font-size:10px;
+  letter-spacing:0.14em;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:8px;
+}
+
+input[type="file"] {
+  margin-bottom:20px;
+  color:var(--muted);
+}
+
+.code-section {
+  display:none;
+}
+
+.code-section.visible {
+  display:block;
+}
+
+.code-input {
+  width:100%;
+  background:var(--bg);
+  border:1px solid var(--dim);
+  padding:14px;
+  text-align:center;
+  font-family:'Syne Mono';
+  font-size:20px;
+  color:var(--accent);
+}
+
+.btn {
+  width:100%;
+  margin-top:16px;
+  padding:14px;
+  background:var(--accent);
+  border:none;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.progress-wrap { display:none; margin-top:12px; }
+.progress-wrap.visible { display:block; }
+
+.progress-track { height:2px; background:var(--dim); }
+.progress-fill { height:2px; width:0%; background:var(--accent); }
+
+#error-msg { color:var(--error); font-size:12px; margin-top:10px; }
+
+video {
+  width:100vw;
+  height:100vh;
+  object-fit:contain;
+}
+</style>
+</head>
+
+<body>
+
+<div class="screen" id="login-screen">
+  <div class="card">
+    <div class="card-header">
+      <div class="logo">BlueFlix</div>
+      <div class="logo-tag">Secure Player</div>
+    </div>
+
+    <div class="card-body">
+
+      <div class="field-label">Upload Encrypted File (.enc)</div>
+      <input type="file" id="file-input" accept=".enc">
+
+      <div class="code-section" id="code-section">
+        <div class="field-label">Access Code</div>
+        <input class="code-input" id="code-input" placeholder="XXXX-XXXX">
+
+        <button class="btn" id="play-btn">Unlock & Play</button>
+      </div>
+
+      <div id="error-msg"></div>
+
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="video-screen" style="display:none;">
+  <video id="video" controls autoplay></video>
+</div>
+
+<script>
+// constants
+const PBKDF2_ITERS = 200000;
+const SALT_BYTES = 32;
+const NONCE_BYTES = 12;
+const HEADER_BYTES = SALT_BYTES + 4;
+
+// DOM
+const fileInput = document.getElementById('file-input');
+const codeSection = document.getElementById('code-section');
+const codeInput = document.getElementById('code-input');
+const playBtn = document.getElementById('play-btn');
+const errorMsg = document.getElementById('error-msg');
+const video = document.getElementById('video');
+const loginScreen = document.getElementById('login-screen');
+const videoScreen = document.getElementById('video-screen');
+
+// show code input after valid file
+fileInput.addEventListener('change', () => {
+  const file = fileInput.files[0];
+  if (file && file.name.toLowerCase().endsWith('.enc')) {
+    codeSection.classList.add('visible');
+    errorMsg.textContent = '';
+  } else {
+    codeSection.classList.remove('visible');
+    errorMsg.textContent = 'Please select a valid .enc file.';
+  }
+});
+
+// helper
+function makeBufferedReader(reader) {
+  let leftover = new Uint8Array(0);
+  return {
+    async read(n) {
+      const chunks = [leftover];
+      let got = leftover.length;
+      while (got < n) {
+        const { done, value } = await reader.read();
+        if (done) throw new Error('Unexpected EOF');
+        chunks.push(value);
+        got += value.length;
+      }
+      const merged = new Uint8Array(got);
+      let pos = 0;
+      for (const c of chunks) { merged.set(c, pos); pos += c.length; }
+      leftover = merged.slice(n);
+      return merged.slice(0, n);
+    }
+  };
+}
+
+// unlock
+playBtn.onclick = async () => {
+  try {
+    const file = fileInput.files[0];
+    if (!file) throw new Error('Upload file first.');
+
+    const code = codeInput.value.trim();
+    if (!code) throw new Error('Enter code.');
+
+    const br = makeBufferedReader(file.stream().getReader());
+
+    // header
+    const header = await br.read(HEADER_BYTES);
+    const salt = header.slice(0, SALT_BYTES);
+    const chunks = new DataView(header.buffer).getUint32(SALT_BYTES, false);
+
+    // key
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(code),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    );
+
+    const key = await crypto.subtle.deriveKey(
+      { name:'PBKDF2', salt, iterations:PBKDF2_ITERS, hash:'SHA-256' },
+      keyMaterial,
+      { name:'AES-GCM', length:256 },
+      false,
+      ['decrypt']
+    );
+
+    const output = [];
+
+    for (let i = 0; i < chunks; i++) {
+      const nonce = await br.read(NONCE_BYTES);
+      const lenBuf = await br.read(8);
+      const len = Number(new DataView(lenBuf.buffer).getBigUint64(0, false));
+      const data = await br.read(len);
+      const dec = await crypto.subtle.decrypt({ name:'AES-GCM', iv:nonce }, key, data);
+      output.push(dec);
+    }
+
+    const blob = new Blob(output, { type:'video/mp4' });
+    const url = URL.createObjectURL(blob);
+
+    loginScreen.style.display = 'none';
+    videoScreen.style.display = 'flex';
+
+    video.src = url;
+    video.play();
+
+  } catch (e) {
+    errorMsg.textContent = e.message;
+  }
+};
+</script>
+
+</body>
+</html>
