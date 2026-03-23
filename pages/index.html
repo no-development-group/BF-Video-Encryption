@@ -151,6 +151,7 @@ const fileChosenName = document.getElementById('file-chosen-name');
 const fileClear      = document.getElementById('file-clear');
 const uploadNextBtn  = document.getElementById('upload-next-btn');
 const uploadErrorMsg = document.getElementById('upload-error-msg');
+let encArrayBuffer = null;
 
 function setFile(file) {
   if (!file) { clearFile(); return; }
@@ -161,6 +162,12 @@ function setFile(file) {
   }
   uploadErrorMsg.textContent = '';
   selectedFile = file;
+
+  const reader = new FileReader();
+  reader.onload = e => { encArrayBuffer = e.target.result; };
+  reader.onerror = () => { uploadErrorMsg.textContent = 'Could not read file.'; clearFile(); };
+  reader.readAsArrayBuffer(file);
+
   fileChosenName.textContent = file.name;
   dropZone.style.display  = 'none';
   fileChosen.style.display = 'flex';
@@ -169,6 +176,7 @@ function setFile(file) {
 
 function clearFile() {
   selectedFile = null;
+  encArrayBuffer = null;
   fileInput.value = '';
   dropZone.style.display  = '';
   fileChosen.style.display = 'none';
@@ -242,7 +250,8 @@ playBtn.addEventListener('click', async () => {
   try {
     // 1. Read the uploaded file into an ArrayBuffer
     setProgress(5, 'Reading file…');
-    const ab = await selectedFile.arrayBuffer();
+    const ab = encArrayBuffer;
+    if (!ab) throw new Error('File data lost — please re-select your .enc file.');
     const br = makeBufferReader(ab);
 
     // 2. Read header
