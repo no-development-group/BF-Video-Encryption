@@ -1,2 +1,5 @@
-# Ingnore Web Page
+# Ignore Web Page
 pages/
+
+# Ignore GitIgnore
+.gitignore
