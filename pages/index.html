@@ -8,15 +8,15 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Syne+Mono&display=swap');
 
-* { box-sizing:border-box; margin:0; padding:0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 
-:root {
+:root{
   --bg:#05060a; --surface:#0c0e16; --border:#181c2c;
   --accent:#e8ff47; --dim:#2a2f45; --text:#eceef8;
   --muted:#454a62; --error:#ff4f6a;
 }
 
-html,body {
+html,body{
   height:100%;
   background:var(--bg);
   color:var(--text);
@@ -24,107 +24,129 @@ html,body {
   overflow:hidden;
 }
 
-.bg-grid {
+.bg-grid{
   position:fixed; inset:0;
-  background-image:linear-gradient(rgba(232,255,71,0.03) 1px,transparent 1px),
-                   linear-gradient(90deg,rgba(232,255,71,0.03) 1px,transparent 1px);
+  background-image:
+    linear-gradient(rgba(232,255,71,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(232,255,71,0.03) 1px,transparent 1px);
   background-size:48px 48px;
+  pointer-events:none;
 }
 
-.screen {
+.screen{
   position:fixed; inset:0;
   display:flex; align-items:center; justify-content:center;
+  transition:opacity .4s, transform .4s;
 }
+.screen.hidden{opacity:0;pointer-events:none;transform:scale(.97);}
 
-.card {
+.card{
   width:400px;
   background:var(--surface);
   border:1px solid var(--border);
   border-radius:4px;
   overflow:hidden;
-  box-shadow:0 40px 100px rgba(0,0,0,0.7);
+  box-shadow:0 40px 100px rgba(0,0,0,.7);
 }
 
-.card-header {
+.card-header{
   background:var(--accent);
   padding:20px 28px;
-  display:flex;
-  gap:10px;
+  display:flex; gap:10px;
 }
 
-.logo {
-  font-size:22px;
-  font-weight:800;
-  color:#05060a;
-}
-
-.logo-tag {
+.logo{font-size:22px;font-weight:800;color:#05060a;}
+.logo-tag{
   font-family:'Syne Mono';
   font-size:10px;
-  color:rgba(0,0,0,0.6);
+  color:rgba(0,0,0,.6);
+  text-transform:uppercase;
 }
 
-.card-body { padding:28px; }
+.card-body{padding:32px 28px;}
 
-.field-label {
+.date-badge{
+  font-family:'Syne Mono';
   font-size:10px;
-  letter-spacing:0.14em;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--accent);
+  border:1px solid rgba(232,255,71,.2);
+  padding:4px 10px;
+  display:inline-block;
+  margin-bottom:24px;
+}
+
+.field-label{
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.14em;
   text-transform:uppercase;
   color:var(--muted);
   margin-bottom:8px;
 }
 
-input[type="file"] {
+.file-input{
+  width:100%;
   margin-bottom:20px;
   color:var(--muted);
 }
 
-.code-section {
-  display:none;
-}
+.code-section{display:none;}
+.code-section.visible{display:block;}
 
-.code-section.visible {
-  display:block;
-}
-
-.code-input {
+.code-input{
   width:100%;
   background:var(--bg);
   border:1px solid var(--dim);
+  border-radius:3px;
   padding:14px;
   text-align:center;
   font-family:'Syne Mono';
-  font-size:20px;
+  font-size:22px;
   color:var(--accent);
+  letter-spacing:.2em;
 }
 
-.btn {
+.error-msg{
+  font-family:'Syne Mono';
+  font-size:11px;
+  color:var(--error);
+  min-height:20px;
+  margin:10px 0 16px;
+}
+
+.btn{
   width:100%;
-  margin-top:16px;
-  padding:14px;
+  padding:15px;
   background:var(--accent);
   border:none;
-  font-weight:bold;
+  font-weight:800;
   cursor:pointer;
 }
 
-.progress-wrap { display:none; margin-top:12px; }
-.progress-wrap.visible { display:block; }
+.progress-wrap{margin-top:16px;display:none;}
+.progress-wrap.visible{display:block;}
 
-.progress-track { height:2px; background:var(--dim); }
-.progress-fill { height:2px; width:0%; background:var(--accent); }
+.progress-track{height:2px;background:var(--dim);}
+.progress-fill{height:100%;width:0%;background:var(--accent);}
+.progress-label{
+  font-family:'Syne Mono';
+  font-size:10px;
+  color:var(--muted);
+  margin-top:7px;
+}
 
-#error-msg { color:var(--error); font-size:12px; margin-top:10px; }
-
-video {
-  width:100vw;
-  height:100vh;
+#video-screen{background:#000;}
+video{
+  width:100vw;height:100vh;
   object-fit:contain;
 }
 </style>
 </head>
 
 <body>
+<div class="bg-grid"></div>
 
 <div class="screen" id="login-screen">
   <div class="card">
@@ -135,21 +157,24 @@ video {
 
     <div class="card-body">
 
-      <div class="field-label">Upload Encrypted File (.enc)</div>
-      <input type="file" id="file-input" accept=".enc">
+      <div class="date-badge" id="date-badge"></div>
+
+      <div class="field-label">Encrypted File (.enc)</div>
+      <input type="file" id="file-input" class="file-input" accept=".enc">
 
       <div class="code-section" id="code-section">
-        <div class="field-label">Access Code</div>
+        <div class="field-label">Daily Access Code</div>
         <input class="code-input" id="code-input" placeholder="XXXX-XXXX">
 
+        <div class="error-msg" id="error-msg"></div>
+
         <button class="btn" id="play-btn">Unlock & Play</button>
-      </div>
 
-      <div id="error-msg"></div>
-
-      <div class="progress-wrap" id="progress-wrap">
-        <div class="progress-track">
-          <div class="progress-fill" id="progress-fill"></div>
+        <div class="progress-wrap" id="progress-wrap">
+          <div class="progress-track">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+          <div class="progress-label" id="progress-label"></div>
         </div>
       </div>
 
@@ -157,119 +182,126 @@ video {
   </div>
 </div>
 
-<div class="screen" id="video-screen" style="display:none;">
+<div class="screen hidden" id="video-screen">
   <video id="video" controls autoplay></video>
 </div>
 
 <script>
 // constants
-const PBKDF2_ITERS = 200000;
-const SALT_BYTES = 32;
-const NONCE_BYTES = 12;
-const HEADER_BYTES = SALT_BYTES + 4;
+const PBKDF2_ITERS=200000;
+const SALT_BYTES=32;
+const NONCE_BYTES=12;
+const HEADER_BYTES=SALT_BYTES+4;
+
+// date
+const d=new Date();
+document.getElementById('date-badge').textContent=
+`Today · ${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
 
 // DOM
-const fileInput = document.getElementById('file-input');
-const codeSection = document.getElementById('code-section');
-const codeInput = document.getElementById('code-input');
-const playBtn = document.getElementById('play-btn');
-const errorMsg = document.getElementById('error-msg');
-const video = document.getElementById('video');
-const loginScreen = document.getElementById('login-screen');
-const videoScreen = document.getElementById('video-screen');
+const fileInput=document.getElementById('file-input');
+const codeSection=document.getElementById('code-section');
+const codeInput=document.getElementById('code-input');
+const playBtn=document.getElementById('play-btn');
+const errorMsg=document.getElementById('error-msg');
+const progressWrap=document.getElementById('progress-wrap');
+const progressFill=document.getElementById('progress-fill');
+const progressLabel=document.getElementById('progress-label');
+const loginScreen=document.getElementById('login-screen');
+const videoScreen=document.getElementById('video-screen');
+const video=document.getElementById('video');
 
-// show code input after valid file
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (file && file.name.toLowerCase().endsWith('.enc')) {
+// show code section
+fileInput.onchange=()=>{
+  const f=fileInput.files[0];
+  if(f && f.name.toLowerCase().endsWith('.enc')){
     codeSection.classList.add('visible');
-    errorMsg.textContent = '';
-  } else {
+    errorMsg.textContent='';
+  }else{
     codeSection.classList.remove('visible');
-    errorMsg.textContent = 'Please select a valid .enc file.';
+    errorMsg.textContent='Select a valid .enc file';
   }
-});
+};
 
-// helper
-function makeBufferedReader(reader) {
-  let leftover = new Uint8Array(0);
-  return {
-    async read(n) {
-      const chunks = [leftover];
-      let got = leftover.length;
-      while (got < n) {
-        const { done, value } = await reader.read();
-        if (done) throw new Error('Unexpected EOF');
+// buffered reader
+function makeBufferedReader(reader){
+  let leftover=new Uint8Array(0);
+  return{
+    async read(n){
+      const chunks=[leftover];
+      let got=leftover.length;
+      while(got<n){
+        const {done,value}=await reader.read();
+        if(done) throw new Error('Unexpected EOF');
         chunks.push(value);
-        got += value.length;
+        got+=value.length;
       }
-      const merged = new Uint8Array(got);
-      let pos = 0;
-      for (const c of chunks) { merged.set(c, pos); pos += c.length; }
-      leftover = merged.slice(n);
-      return merged.slice(0, n);
+      const merged=new Uint8Array(got);
+      let pos=0;
+      for(const c of chunks){merged.set(c,pos);pos+=c.length;}
+      leftover=merged.slice(n);
+      return merged.slice(0,n);
     }
   };
 }
 
+// UI helpers
+function setProgress(p,label){
+  progressWrap.classList.add('visible');
+  progressFill.style.width=p+'%';
+  progressLabel.textContent=label;
+}
+
 // unlock
-playBtn.onclick = async () => {
-  try {
-    const file = fileInput.files[0];
-    if (!file) throw new Error('Upload file first.');
+playBtn.onclick=async()=>{
+try{
+  const file=fileInput.files[0];
+  if(!file) throw new Error('Upload file first');
 
-    const code = codeInput.value.trim();
-    if (!code) throw new Error('Enter code.');
+  const code=codeInput.value.trim();
+  if(!code) throw new Error('Enter code');
 
-    const br = makeBufferedReader(file.stream().getReader());
+  const br=makeBufferedReader(file.stream().getReader());
 
-    // header
-    const header = await br.read(HEADER_BYTES);
-    const salt = header.slice(0, SALT_BYTES);
-    const chunks = new DataView(header.buffer).getUint32(SALT_BYTES, false);
+  setProgress(5,'Reading header…');
+  const header=await br.read(HEADER_BYTES);
+  const salt=header.slice(0,SALT_BYTES);
+  const chunks=new DataView(header.buffer).getUint32(SALT_BYTES,false);
 
-    // key
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(code),
-      'PBKDF2',
-      false,
-      ['deriveKey']
-    );
+  setProgress(15,'Deriving key…');
+  const keyMaterial=await crypto.subtle.importKey('raw',new TextEncoder().encode(code),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey(
+    {name:'PBKDF2',salt,iterations:PBKDF2_ITERS,hash:'SHA-256'},
+    keyMaterial,
+    {name:'AES-GCM',length:256},
+    false,
+    ['decrypt']
+  );
 
-    const key = await crypto.subtle.deriveKey(
-      { name:'PBKDF2', salt, iterations:PBKDF2_ITERS, hash:'SHA-256' },
-      keyMaterial,
-      { name:'AES-GCM', length:256 },
-      false,
-      ['decrypt']
-    );
-
-    const output = [];
-
-    for (let i = 0; i < chunks; i++) {
-      const nonce = await br.read(NONCE_BYTES);
-      const lenBuf = await br.read(8);
-      const len = Number(new DataView(lenBuf.buffer).getBigUint64(0, false));
-      const data = await br.read(len);
-      const dec = await crypto.subtle.decrypt({ name:'AES-GCM', iv:nonce }, key, data);
-      output.push(dec);
-    }
-
-    const blob = new Blob(output, { type:'video/mp4' });
-    const url = URL.createObjectURL(blob);
-
-    loginScreen.style.display = 'none';
-    videoScreen.style.display = 'flex';
-
-    video.src = url;
-    video.play();
-
-  } catch (e) {
-    errorMsg.textContent = e.message;
+  const out=[];
+  for(let i=0;i<chunks;i++){
+    const nonce=await br.read(NONCE_BYTES);
+    const lenBuf=await br.read(8);
+    const len=Number(new DataView(lenBuf.buffer).getBigUint64(0,false));
+    const data=await br.read(len);
+    const dec=await crypto.subtle.decrypt({name:'AES-GCM',iv:nonce},key,data);
+    out.push(dec);
+    setProgress(20+Math.round((i/chunks)*75),`Decrypting ${i+1}/${chunks}`);
   }
+
+  setProgress(98,'Preparing video…');
+  const url=URL.createObjectURL(new Blob(out,{type:'video/mp4'}));
+
+  loginScreen.classList.add('hidden');
+  videoScreen.classList.remove('hidden');
+
+  video.src=url;
+  video.play();
+
+}catch(e){
+  errorMsg.textContent=e.message;
+}
 };
 </script>
-
 </body>
 </html>
