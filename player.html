@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlueFlix Player</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Syne+Mono&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#05060a; --surface:#0c0e16; --border:#181c2c;
+    --accent:#e8ff47; --dim:#2a2f45; --text:#eceef8;
+    --muted:#454a62; --error:#ff4f6a;
+  }
+  html,body { height:100%; background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; overflow:hidden; }
+
+  .bg-grid {
+    position:fixed; inset:0;
+    background-image:linear-gradient(rgba(232,255,71,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(232,255,71,0.03) 1px,transparent 1px);
+    background-size:48px 48px; pointer-events:none;
+  }
+  .screen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; transition:opacity 0.4s,transform 0.4s; }
+  .screen.hidden { opacity:0; pointer-events:none; transform:scale(0.97); }
+  .card { width:400px; background:var(--surface); border:1px solid var(--border); border-radius:4px; overflow:hidden; box-shadow:0 40px 100px rgba(0,0,0,0.7); }
+  .card-header { background:var(--accent); padding:20px 28px 18px; display:flex; align-items:baseline; gap:10px; }
+  .logo { font-size:22px; font-weight:800; color:#05060a; letter-spacing:-0.5px; }
+  .logo-tag { font-family:'Syne Mono',monospace; font-size:10px; color:rgba(5,6,10,0.55); letter-spacing:0.1em; text-transform:uppercase; }
+  .card-body { padding:32px 28px 28px; }
+  .date-badge { font-family:'Syne Mono',monospace; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--accent); border:1px solid rgba(232,255,71,0.2); border-radius:2px; padding:4px 10px; display:inline-block; margin-bottom:24px; }
+  .field-label { font-size:10px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+  .code-input { width:100%; background:var(--bg); border:1px solid var(--dim); border-radius:3px; padding:14px 16px; font-family:'Syne Mono',monospace; font-size:22px; color:var(--accent); letter-spacing:0.2em; outline:none; text-transform:uppercase; transition:border-color 0.2s; text-align:center; }
+  .code-input::placeholder { color:var(--dim); font-size:16px; }
+  .code-input:focus { border-color:var(--accent); }
+  .error-msg { font-family:'Syne Mono',monospace; font-size:11px; color:var(--error); min-height:20px; margin:10px 0 16px; letter-spacing:0.05em; }
+  .btn { width:100%; padding:15px; background:var(--accent); color:#05060a; border:none; border-radius:3px; font-family:'Syne',sans-serif; font-size:13px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; transition:opacity 0.2s,transform 0.1s; }
+  .btn:hover { opacity:0.88; }
+  .btn:active { transform:scale(0.99); }
+  .btn:disabled { opacity:0.3; cursor:not-allowed; transform:none; }
+  .progress-wrap { margin-top:16px; display:none; }
+  .progress-wrap.visible { display:block; }
+  .progress-track { height:2px; background:var(--dim); border-radius:1px; overflow:hidden; }
+  .progress-fill { height:100%; width:0%; background:var(--accent); transition:width 0.3s; border-radius:1px; }
+  .progress-label { font-family:'Syne Mono',monospace; font-size:10px; color:var(--muted); margin-top:7px; letter-spacing:0.07em; }
+  #video-screen { background:#000; }
+  video { width:100vw; height:100vh; object-fit:contain; display:block; }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+
+<div class="screen" id="login-screen">
+  <div class="card">
+    <div class="card-header">
+      <div class="logo">BlueFlix</div>
+      <div class="logo-tag">Secure Player</div>
+    </div>
+    <div class="card-body">
+      <div class="date-badge" id="date-badge">—</div>
+      <div class="field-label">Daily Access Code</div>
+      <input class="code-input" id="code-input" type="text" placeholder="XXXX-XXXX" maxlength="9" autocomplete="off" spellcheck="false">
+      <div class="error-msg" id="error-msg"></div>
+      <button class="btn" id="play-btn">Unlock &amp; Play</button>
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <div class="progress-label" id="progress-label"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="screen hidden" id="video-screen">
+  <video id="video" controls autoplay controlsList="nodownload" oncontextmenu="return false;"></video>
+</div>
+
+<script>
+// ── Constants (must match encryptor.py) ───────────────────────────────────
+const ENC_FILE     = 'video.enc';
+const PBKDF2_ITERS = 200_000;
+const SALT_BYTES   = 32;
+const NONCE_BYTES  = 12;
+const HEADER_BYTES = SALT_BYTES + 4;
+
+// ── Date ──────────────────────────────────────────────────────────────────
+function todayUTC() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+}
+const today = todayUTC();
+document.getElementById('date-badge').textContent = `Today · ${today}`;
+
+// ── DOM ───────────────────────────────────────────────────────────────────
+const codeInput    = document.getElementById('code-input');
+const playBtn      = document.getElementById('play-btn');
+const errorMsg     = document.getElementById('error-msg');
+const progressWrap = document.getElementById('progress-wrap');
+const progressFill = document.getElementById('progress-fill');
+const progressLabel= document.getElementById('progress-label');
+const loginScreen  = document.getElementById('login-screen');
+const videoScreen  = document.getElementById('video-screen');
+const videoEl      = document.getElementById('video');
+
+// Auto-format XXXX-XXXX
+codeInput.addEventListener('input', () => {
+  let v = codeInput.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,8);
+  if (v.length > 4) v = v.slice(0,4) + '-' + v.slice(4);
+  codeInput.value = v;
+});
+codeInput.addEventListener('keydown', e => { if (e.key==='Enter') playBtn.click(); });
+
+// ── Buffered stream reader ────────────────────────────────────────────────
+function makeBufferedReader(reader) {
+  let leftover = new Uint8Array(0);
+  return {
+    async read(n) {
+      const chunks = [leftover];
+      let got = leftover.byteLength;
+      while (got < n) {
+        const { done, value } = await reader.read();
+        if (done) throw new Error('Stream ended unexpectedly');
+        chunks.push(value);
+        got += value.byteLength;
+      }
+      const merged = new Uint8Array(got);
+      let pos = 0;
+      for (const c of chunks) { merged.set(c, pos); pos += c.byteLength; }
+      leftover = merged.slice(n);
+      return merged.slice(0, n);
+    }
+  };
+}
+
+// ── Main unlock ───────────────────────────────────────────────────────────
+playBtn.addEventListener('click', async () => {
+  const code = codeInput.value.trim().toUpperCase();
+  if (code.length !== 9) { showError('Enter the full code (XXXX-XXXX).'); return; }
+
+  setLoading(true);
+  errorMsg.textContent = '';
+
+  try {
+    // 1. Open streaming fetch
+    setProgress(5, 'Opening file…');
+    const resp = await fetch(ENC_FILE);
+    if (!resp.ok) throw new Error(`Could not load ${ENC_FILE} — check USB.`);
+    const br = makeBufferedReader(resp.body.getReader());
+
+    // 2. Read header
+    setProgress(10, 'Reading header…');
+    const headerBytes = await br.read(HEADER_BYTES);
+    const salt        = headerBytes.slice(0, SALT_BYTES);
+    const numChunks   = new DataView(headerBytes.buffer).getUint32(SALT_BYTES, false);
+
+    // 3. Derive key
+    setProgress(18, 'Deriving key…');
+    const enc         = new TextEncoder();
+    const keyMaterial = enc.encode(code + ':' + today);
+    const keyMat = await crypto.subtle.importKey('raw', keyMaterial, 'PBKDF2', false, ['deriveKey']);
+    const aesKey = await crypto.subtle.deriveKey(
+      { name:'PBKDF2', salt, iterations:PBKDF2_ITERS, hash:'SHA-256' },
+      keyMat,
+      { name:'AES-GCM', length:256 },
+      false,
+      ['decrypt']
+    );
+
+    // 4. Decrypt first chunk to verify password before proceeding
+    setProgress(28, 'Verifying key…');
+    const nonce0  = await br.read(NONCE_BYTES);
+    const len0buf = await br.read(8);
+    const len0    = Number(new DataView(len0buf.buffer).getBigUint64(0, false));
+    const ct0     = await br.read(len0);
+    let firstPlain;
+    try {
+      firstPlain = await crypto.subtle.decrypt({ name:'AES-GCM', iv:nonce0 }, aesKey, ct0);
+    } catch {
+      throw new Error('Wrong code or expired key — check today\'s date and code.');
+    }
+
+    // 5. Decrypt remaining chunks, collecting as separate ArrayBuffers.
+    //    new Blob([ab1, ab2, ab3...]) handles multi-part blobs natively —
+    //    no need to merge into one giant buffer.
+    const plainChunks = [firstPlain];
+    for (let i = 1; i < numChunks; i++) {
+      const nonce  = await br.read(NONCE_BYTES);
+      const lenBuf = await br.read(8);
+      const len    = Number(new DataView(lenBuf.buffer).getBigUint64(0, false));
+      const ct     = await br.read(len);
+      const plain  = await crypto.subtle.decrypt({ name:'AES-GCM', iv:nonce }, aesKey, ct);
+      plainChunks.push(plain);
+      setProgress(30 + Math.round((i / numChunks) * 65), `Decrypting ${i+1} / ${numChunks}…`);
+    }
+
+    // 6. Build blob from chunk array — Blob does NOT allocate one contiguous buffer
+    setProgress(97, 'Loading player…');
+    const mainBlobUrl = URL.createObjectURL(new Blob(plainChunks, { type: 'video/mp4' }));
+
+    setProgress(100, 'Ready!');
+    await sleep(150);
+
+    // 7. Switch screens
+    loginScreen.classList.add('hidden');
+    videoScreen.classList.remove('hidden');
+
+    // 8. Play intro then main
+    const INTRO = 'data/intro.mp4';
+    videoEl.src = INTRO;
+    const introOk = await new Promise(resolve => {
+      videoEl.addEventListener('canplay', () => resolve(true),  { once: true });
+      videoEl.addEventListener('error',   () => resolve(false), { once: true });
+      videoEl.play().catch(() => resolve(false));
+    });
+
+    if (introOk) {
+      videoEl.addEventListener('ended', () => {
+        videoEl.src = mainBlobUrl;
+        videoEl.play().catch(() => {});
+      }, { once: true });
+    } else {
+      videoEl.src = mainBlobUrl;
+      videoEl.play().catch(() => {});
+    }
+
+  } catch(err) {
+    showError(err.message);
+    setLoading(false);
+    loginScreen.classList.remove('hidden');
+    videoScreen.classList.add('hidden');
+  }
+});
+
+function setLoading(on) {
+  playBtn.disabled = on;
+  playBtn.textContent = on ? 'Working…' : 'Unlock & Play';
+  progressWrap.classList.toggle('visible', on);
+  if (!on) { progressFill.style.width='0%'; progressLabel.textContent=''; }
+}
+function setProgress(pct, label) {
+  progressFill.style.width = pct+'%';
+  progressLabel.textContent = label;
+}
+function showError(msg) { errorMsg.textContent = msg; codeInput.focus(); }
+function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
+</script>
+
+</body>
+</html>

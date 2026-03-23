@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlueFlix · Key Generator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Syne+Mono&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#f5f4ef; --surface:#fff; --border:#e0ddd4;
+    --accent:#1a1a2e; --hi:#e8ff47; --dim:#a09e94;
+    --text:#1a1a2e; --muted:#7a7870; --error:#c0392b;
+    --today:#e8ff47;
+  }
+  html,body { min-height:100%; background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; }
+
+  header {
+    background:var(--accent); color:var(--hi);
+    padding:24px 40px; display:flex; align-items:center; gap:16px;
+    border-bottom:3px solid var(--hi);
+  }
+  .header-logo { font-size:24px; font-weight:800; letter-spacing:-0.5px; }
+  .header-sub { font-family:'Syne Mono',monospace; font-size:11px; color:rgba(232,255,71,0.55); letter-spacing:0.1em; text-transform:uppercase; margin-top:2px; }
+  .header-warning {
+    margin-left:auto; background:rgba(232,255,71,0.1); border:1px solid rgba(232,255,71,0.25);
+    border-radius:3px; padding:8px 14px;
+    font-family:'Syne Mono',monospace; font-size:10px; color:rgba(232,255,71,0.7);
+    letter-spacing:0.08em; text-transform:uppercase;
+  }
+
+  main { max-width:860px; margin:0 auto; padding:40px 24px 80px; }
+
+  /* ── Controls ── */
+  .controls {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:6px; padding:28px 28px 24px;
+    margin-bottom:32px;
+    box-shadow:0 2px 12px rgba(0,0,0,0.06);
+  }
+  .controls-title { font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:20px; }
+  .fields { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:16px; align-items:end; }
+  .field label { display:block; font-size:10px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-bottom:7px; }
+  .field input, .field select {
+    width:100%; padding:11px 14px;
+    background:var(--bg); border:1px solid var(--border);
+    border-radius:4px; font-family:'Syne',sans-serif; font-size:14px; color:var(--text);
+    outline:none; transition:border-color 0.2s;
+  }
+  .field input:focus, .field select:focus { border-color:var(--accent); }
+  .field input[type="password"] { letter-spacing:0.1em; }
+
+  .gen-btn {
+    padding:11px 24px; background:var(--accent); color:var(--hi);
+    border:none; border-radius:4px; font-family:'Syne',sans-serif;
+    font-size:12px; font-weight:800; letter-spacing:0.1em; text-transform:uppercase;
+    cursor:pointer; white-space:nowrap; transition:opacity 0.2s;
+    height:42px;
+  }
+  .gen-btn:hover { opacity:0.85; }
+
+  /* ── Table ── */
+  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.06); }
+
+  .table-header {
+    padding:16px 24px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .table-title { font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); }
+  .copy-all-btn {
+    font-family:'Syne Mono',monospace; font-size:10px; letter-spacing:0.08em;
+    text-transform:uppercase; background:none; border:1px solid var(--border);
+    border-radius:3px; padding:5px 12px; cursor:pointer; color:var(--muted);
+    transition:all 0.2s;
+  }
+  .copy-all-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+  table { width:100%; border-collapse:collapse; }
+  th {
+    font-size:9px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--dim); padding:10px 24px; text-align:left;
+    border-bottom:1px solid var(--border); background:var(--bg);
+  }
+  td { padding:14px 24px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tr.is-today { background:rgba(232,255,71,0.12); }
+  tr.is-today td:first-child { border-left:3px solid #c8df00; }
+  tr:not(.is-today):hover td { background:rgba(0,0,0,0.015); }
+
+  .date-cell { font-family:'Syne Mono',monospace; font-size:13px; color:var(--text); }
+  .day-cell { font-size:11px; color:var(--muted); }
+
+  .today-badge {
+    display:inline-block; background:var(--accent); color:var(--accent);
+    font-family:'Syne Mono',monospace; font-size:9px; font-weight:700;
+    letter-spacing:0.1em; text-transform:uppercase;
+    padding:2px 7px; border-radius:2px; margin-left:8px;
+    background:#1a1a2e; color:#e8ff47;
+  }
+
+  .code-cell {
+    font-family:'Syne Mono',monospace; font-size:18px; font-weight:500;
+    letter-spacing:0.18em; color:#1a1a2e;
+  }
+  tr.is-today .code-cell { color:#1a1a2e; font-weight:700; }
+
+  .copy-btn {
+    font-family:'Syne Mono',monospace; font-size:10px; letter-spacing:0.06em;
+    background:none; border:1px solid var(--border); border-radius:3px;
+    padding:5px 12px; cursor:pointer; color:var(--muted); transition:all 0.15s;
+  }
+  .copy-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .copy-btn.copied { border-color:#27ae60; color:#27ae60; }
+
+  .empty-state { padding:48px; text-align:center; color:var(--dim); font-family:'Syne Mono',monospace; font-size:13px; }
+
+  /* ── Responsive ── */
+  @media(max-width:640px) {
+    .fields { grid-template-columns:1fr 1fr; }
+    .gen-btn { grid-column:1/-1; width:100%; }
+    header { padding:16px 20px; flex-wrap:wrap; gap:10px; }
+    .header-warning { margin-left:0; }
+    main { padding:24px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-logo">BlueFlix</div>
+    <div class="header-sub">Key Generator — Private</div>
+  </div>
+  <div class="header-warning">⚠ Keep this page private — do not share</div>
+</header>
+
+<main>
+  <div class="controls">
+    <div class="controls-title">Generate Daily Codes</div>
+    <div class="fields">
+      <div class="field">
+        <label>Master Password</label>
+        <input type="password" id="master-pw" placeholder="Your secret password" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Encrypted Filename</label>
+        <input type="text" id="filename" value="video.enc" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label>Days to show</label>
+        <select id="days-count">
+          <option value="7">Next 7 days</option>
+          <option value="14" selected>Next 14 days</option>
+          <option value="30">Next 30 days</option>
+          <option value="60">Next 60 days</option>
+        </select>
+      </div>
+      <button class="gen-btn" id="gen-btn">Generate</button>
+    </div>
+  </div>
+
+  <div class="table-wrap" id="table-wrap">
+    <div class="table-header">
+      <div class="table-title" id="table-title">Daily Access Codes</div>
+      <button class="copy-all-btn" id="copy-all-btn">Copy All</button>
+    </div>
+    <div id="table-body">
+      <div class="empty-state">Enter your master password and click Generate</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const DAYS_OF_WEEK = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function dateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function todayStr() {
+  return dateStr(new Date());
+}
+
+async function hmacSHA256bytes(masterPassword, message) {
+  const enc = new TextEncoder();
+  const keyMat = await crypto.subtle.importKey(
+    'raw', enc.encode(masterPassword),
+    { name:'HMAC', hash:'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', keyMat, enc.encode(message));
+  return new Uint8Array(sig);
+}
+
+async function getDailyCode(masterPassword, filename, date) {
+  const hmac = await hmacSHA256bytes(masterPassword, `${filename}:${date}`);
+  const hex8 = Array.from(hmac).map(b=>b.toString(16).padStart(2,'0')).join('').toUpperCase().slice(0,8);
+  return hex8.slice(0,4) + '-' + hex8.slice(4,8);
+}
+
+async function generateTable() {
+  const pw       = document.getElementById('master-pw').value;
+  const filename = document.getElementById('filename').value.trim() || 'video.enc';
+  const days     = parseInt(document.getElementById('days-count').value);
+  const today    = todayStr();
+
+  if (!pw) { alert('Please enter your master password.'); return; }
+
+  const btn = document.getElementById('gen-btn');
+  btn.textContent = 'Generating…';
+  btn.disabled = true;
+
+  const rows = [];
+  const base = new Date();
+  // Start from yesterday so today is always visible
+  base.setDate(base.getDate() - 1);
+
+  for (let i = 0; i < days + 1; i++) {
+    const d    = new Date(base);
+    d.setDate(base.getDate() + i);
+    const ds   = dateStr(d);
+    const code = await getDailyCode(pw, filename, ds);
+    rows.push({ date: ds, day: DAYS_OF_WEEK[d.getDay()], code, isToday: ds === today });
+  }
+
+  renderTable(rows, filename);
+  btn.textContent = 'Generate';
+  btn.disabled = false;
+}
+
+function renderTable(rows, filename) {
+  document.getElementById('table-title').textContent = `Daily codes — ${filename}`;
+
+  const html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Day</th>
+          <th>Access Code</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr class="${r.isToday ? 'is-today' : ''}">
+            <td class="date-cell">
+              ${r.date}
+              ${r.isToday ? '<span class="today-badge">Today</span>' : ''}
+            </td>
+            <td class="day-cell">${r.day}</td>
+            <td class="code-cell">${r.code}</td>
+            <td>
+              <button class="copy-btn" onclick="copyCode(this, '${r.code}')">Copy</button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  document.getElementById('table-body').innerHTML = html;
+}
+
+function copyCode(btn, code) {
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+document.getElementById('copy-all-btn').addEventListener('click', () => {
+  const codes = Array.from(document.querySelectorAll('.code-cell')).map(el => el.textContent.trim());
+  const dates = Array.from(document.querySelectorAll('.date-cell')).map(el => el.textContent.trim().split('\n')[0].trim());
+  const text  = codes.map((c,i) => `${dates[i]}  ${c}`).join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-all-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy All', 1500);
+  });
+});
+
+document.getElementById('gen-btn').addEventListener('click', generateTable);
+document.getElementById('master-pw').addEventListener('keydown', e => { if(e.key==='Enter') generateTable(); });
+</script>
+</body>
+</html>
