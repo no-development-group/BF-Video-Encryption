@@ -223,17 +223,19 @@ codeInput.addEventListener('input', () => {
 codeInput.addEventListener('keydown', e => { if (e.key==='Enter') playBtn.click(); });
 
 // ── Buffered stream reader (from ArrayBuffer) ─────────────────────────────
-// We read the uploaded File into an ArrayBuffer, then wrap it in
-// the same buffered-reader interface the original code used.
-function makeBufferReader(ab) {
+// Reads slices of a File on demand — no full preload
+function makeFileReader(file) {
   let offset = 0;
-  const buf = new Uint8Array(ab);
   return {
-    async read(n) {
-      if (offset + n > buf.byteLength) throw new Error('Unexpected end of file');
-      const slice = buf.slice(offset, offset + n);
-      offset += n;
-      return slice;
+    read(n) {
+      return new Promise((resolve, reject) => {
+        const slice = file.slice(offset, offset + n);
+        if (slice.size < n) { reject(new Error('Unexpected end of file')); return; }
+        const fr = new FileReader();
+        fr.onload  = e => { offset += n; resolve(new Uint8Array(e.target.result)); };
+        fr.onerror = () => reject(new Error('File read error'));
+        fr.readAsArrayBuffer(slice);
+      });
     }
   };
 }
@@ -250,10 +252,7 @@ playBtn.addEventListener('click', async () => {
   try {
     // 1. Read the uploaded file into an ArrayBuffer
     setProgress(5, 'Reading file…');
-    const ab = encArrayBuffer;
-    if (!ab) throw new Error('File data lost — please re-select your .enc file.');
-    const br = makeBufferReader(ab);
-
+    const br = makeFileReader(selectedFile);
     // 2. Read header
     setProgress(10, 'Reading header…');
     const headerBytes = await br.read(HEADER_BYTES);
